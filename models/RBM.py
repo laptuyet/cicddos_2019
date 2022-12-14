@@ -27,7 +27,7 @@ class RBM(nn.Module):
         self.decay = decay
         self.batch_size = batch_size
         self.num_epochs = num_epochs
-        self.k = k  # số lần lặp trong gib sampling
+        self.k = k  # số lần lặp trong gibbs sampling
         self.device = device
 
         # Khởi tạo Weights và biases
@@ -216,7 +216,7 @@ class RBM(nn.Module):
                 self.optimizer.step()
 
                 # Gathering the size of the batch
-                batch_size = inputs.size(0)
+                batch_size = inputs.size(0)  # inputs size là 1 tensor [N, n_feature] N là số samples, cũng là batchsize
 
                 # Calculating current's batch MSE
                 batch_mse = torch.div(

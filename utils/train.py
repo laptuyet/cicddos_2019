@@ -31,6 +31,8 @@ def train(
     }
 
     for epoch in range(1, num_epochs + 1):
+
+        # đưa model vào trạng thái train
         model.train()
 
         train_loss = 0.0
@@ -71,6 +73,7 @@ def train(
             train_output_pred += outputs.argmax(1).cpu().tolist()
             train_output_true += labels.tolist()
 
+        # đưa model vào trạng thái đánh giá (evaluation)
         model.eval()
 
         val_loss = 0.0
@@ -93,7 +96,7 @@ def train(
                 val_steps += 1
 
                 _, predicted = torch.max(outputs.data, 1)
-                val_total += labels.size(0)
+                val_total += labels.size(0)  # labels size [N, 1] trong đó N là số sample, cũng là size của mini-batch
                 val_correct += (predicted == labels).sum().item()
 
                 val_output_pred += outputs.argmax(1).cpu().tolist()
@@ -111,7 +114,8 @@ def train(
         history['valid']['output_pred'] = val_output_pred
         history['valid']['output_true'] = val_output_true
 
-        print(f'loss: {train_loss/train_steps} - acc: {train_correct/train_total} - val_loss: {val_loss/val_steps} - val_acc: {val_correct/val_total}')
+        print(
+            f'loss: {train_loss / train_steps} - acc: {train_correct / train_total} - val_loss: {val_loss / val_steps} - val_acc: {val_correct / val_total}')
 
     print("Finished training")
 

@@ -3,6 +3,7 @@ import numpy as np
 import os
 import glob
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder, QuantileTransformer
 from sklearn.model_selection import train_test_split
@@ -34,7 +35,8 @@ class CICDdOS2019Preprocessor(object):
             dataset.columns = [self.clean_column_name(column) for column in dataset.columns]
 
         self.data = pd.concat(datasets, axis=0, ignore_index=True)
-        self.data.drop(labels=['fwd_header_length.1', 'no', 'unnamed:_0', 'flow_id', 'source_ip', 'destination_ip',
+        self.data.drop(columns=self.data.columns[0], axis=1, inplace=True)
+        self.data.drop(labels=['fwd_header_length.1', 'unnamed:_0', 'flow_id', 'source_ip', 'destination_ip',
                                'timestamp', 'simillarhttp'],
                        axis=1,
                        inplace=True)  # cột này trùng => bỏ
@@ -69,6 +71,7 @@ class CICDdOS2019Preprocessor(object):
 
         # Find Features that meet the threshold
         constant_features = [column for column, std in data_std.iteritems() if std < threshold]
+        print(constant_features)
 
         # Drop the constant features
         self.data.drop(labels=constant_features, axis=1, inplace=True)
@@ -80,6 +83,10 @@ class CICDdOS2019Preprocessor(object):
 
         # Correlation matrix
         data_corr = self.data.corr()
+        fig = plt.figure(figsize=(15, 15))
+        sns.set(font_scale=1.0)
+        ax = sns.heatmap(data_corr, annot=False)
+        fig.savefig(os.path.join(IMG_DIR, 'correlation_matrix.pdf'))
 
         # Create & Apply mask
         mask = np.triu(np.ones_like(data_corr, dtype=bool))
@@ -87,6 +94,7 @@ class CICDdOS2019Preprocessor(object):
 
         # Find Features that meet the threshold
         correlated_features = [c for c in tri_df.columns if any(tri_df[c] > threshold)]
+        print(correlated_features)
 
         # Drop the highly correlated features
         self.data.drop(labels=correlated_features, axis=1, inplace=True)
@@ -102,11 +110,28 @@ class CICDdOS2019Preprocessor(object):
             'DrDoS_NTP': 'DDos',
             'DrDoS_SNMP': 'DDos',
             'DrDoS_SSDP': 'DDos',
+            'DrDoS_UDP': 'DDos',
+            'DrDoS_LDAP': 'DDos',
             'Syn': 'Syn',
             'TFTP': 'TFTP',
             'UDP-lag': 'UDPLag',
             'WebDDoS': 'DDos'
         }
+
+        # attack_group = {
+        #     'BENIGN': 'Benign',
+        #     'Portmap': 'Attack',
+        #     'DrDoS_DNS': 'Attack',
+        #     'DrDoS_MSSQL': 'Attack',
+        #     'DrDoS_NetBIOS': 'Attack',
+        #     'DrDoS_NTP': 'Attack',
+        #     'DrDoS_SNMP': 'Attack',
+        #     'DrDoS_SSDP': 'Attack',
+        #     'Syn': 'Attack',
+        #     'TFTP': 'Attack',
+        #     'UDP-lag': 'Attack',
+        #     'WebDDoS': 'Attack'
+        # }
 
         # Tạo 1 cột label_category
         self.data['label_category'] = self.data['label'].map(lambda x: attack_group[x])
@@ -153,9 +178,12 @@ class CICDdOS2019Preprocessor(object):
         y_test = pd.DataFrame(le.transform(y_test), columns=["label"])
         y_val = pd.DataFrame(le.transform(y_val), columns=["label"])
 
+        # le.fit(['Benign', 'Portmap', 'DDos', 'Syn', 'TFTP', 'UDPLag'])
+        # le.fit(['Benign', 'Attack'])
+        # print(le.transform(['Benign', 'Attack']))
         return (X_train, y_train), (X_test, y_test), (X_val, y_val)
 
-    def balance_dataset(self, X, y, undersampling_strategy='auto', oversampling_strategy='auto'):
+    def balance_dataset(self, X, y, undersampling_strategy=None, oversampling_strategy=None):
         '''
         trong tập dataset thì số lượng sample cho từng mẫu có thể ko phải lúc nào cũng tỉ lệ 50:50,
         có thể là 70:30 hoặc 90:10 => mất cân bằng dữ liệu,
@@ -174,11 +202,11 @@ class CICDdOS2019Preprocessor(object):
             }
         '''
 
-        under_sampler = RandomUnderSampler(sampling_strategy=undersampling_strategy, random_state=0)
-        X_under, y_under = under_sampler.fit_resample(X, y)
+        # under_sampler = RandomUnderSampler(sampling_strategy=undersampling_strategy, random_state=0)
+        # X_under, y_under = under_sampler.fit_resample(X, y)
 
         over_sampler = SMOTE(sampling_strategy=oversampling_strategy)
-        X_bal, y_bal = over_sampler.fit_resample(X_under, y_under)
+        X_bal, y_bal = over_sampler.fit_resample(X, y)
 
         return X_bal, y_bal
 
@@ -210,14 +238,20 @@ if __name__ == '__main__':
     (X_train, y_train), (X_test, y_test), (X_val, y_val) = cicddos2019.scale(training_set, testing_set, validation_set)
 
     # Balance the training set
-    # X_train_bal, y_train_bal = cicddos2019.balance_dataset(X_train, y_train)
+    # 0: Attack, 1: Benign
+    # oversampling_strategy = {0: 213034, 1: 1121183, 2: 132660, 3: 135876, 4: 141662, 5: 137113}
+    oversampling_strategy= {0: 84400}
+    X_train, y_train = cicddos2019.balance_dataset(X_train, y_train, oversampling_strategy=oversampling_strategy)
 
     # Visualize data
     fig, ax = plt.subplots(figsize=(15, 10))
     y_count = y_train.value_counts()
-    indexes = np.arange(6)
+    labels = {0: 'Benign', 2: 'Portmap', 1: 'DDos', 3: 'Syn', 4: 'TFTP', 5: 'UDPLag'}
+    # labels = {0: 'Attack', 1: 'Benign'}
+    indexes = np.arange(len(labels))
     width = 0.4
-    rect = plt.bar(indexes, y_count.values, width, color="steelblue", label="Class count")
+    rect = plt.bar(indexes, [y_count[index] for index in indexes], width, color="steelblue", label="Class count")
+
 
     def add_text(rect):
         """Add text to top of each bar."""
@@ -227,14 +261,14 @@ if __name__ == '__main__':
 
 
     add_text(rect)
-    ax.set_xticks(indexes + width / 2)
-    ax.set_xticklabels(['Benign', 'DDoS', 'Portmap', 'Syn', 'TFTP', 'UDPLag'])
-    plt.xlabel('Traffic Activity', fontsize=16)
+    ax.set_xticks(indexes)
+    ax.set_xticklabels([labels[i] for i in indexes])
+    plt.xlabel('Type of attack', fontsize=16)
     plt.ylabel('# instances', fontsize=16)
     plt.legend()
-    plt.show()
+    fig.savefig(os.path.join(IMG_DIR, 'classes_count_dataset.pdf'))
 
-    # Save the results
+    # # Save the results
     print('Start saving..')
     X_train.to_pickle(os.path.join(DATA_DIR, 'processed', 'train/train_features.pkl'))
     X_test.to_pickle(os.path.join(DATA_DIR, 'processed', 'test/test_features.pkl'))
